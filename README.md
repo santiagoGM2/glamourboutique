@@ -31,7 +31,7 @@ El contrato del feed y las variables completas están en [la guía de integraci�
 2. Definir `GLAMOUR_MARKUP_PERCENT`. Dejarlo vacío mantiene la venta deshabilitada; no se presume un margen de cero.
 3. Configurar los costos por artículo y el redondeo según el acuerdo comercial. Habilitar la fuente de cambio con `GLAMOUR_FX_PROVIDER=exchange-rate-api`.
 4. Ejecutar `npm run sync:catalog`, revisar el resultado y comprobar `/api/catalog` antes de abrir la venta.
-5. Programar el comando diariamente en el alojamiento elegido y verificar que el estado sigue vigente.
+5. En Vercel, conectar Blob privado y comprobar el cron diario. En un servidor propio, programar el comando y compartir su volumen con la aplicación.
 
 La importación conserva el último catálogo válido si falla la nueva descarga. Las cotizaciones revisan variantes, existencias, margen y antigüedad del catálogo y del cambio en el servidor. Los precios que envía el navegador no se usan para calcular el total.
 
@@ -43,9 +43,13 @@ La clienta realiza la transferencia y adjunta el comprobante en WhatsApp. Abrir 
 
 ## Despliegue y mantenimiento
 
-La versión actual guarda el catálogo como JSON mediante escritura atómica en `GLAMOUR_DATA_DIR` (por defecto `./data`). Se necesita un servidor con un volumen persistente, una sola instancia escritora y un programador diario. El disco efímero de funciones serverless no conserva este catálogo de forma fiable; para ese alojamiento se debe adaptar la persistencia a una base de datos o almacenamiento de objetos antes de habilitar ventas.
+La aplicación soporta Vercel con una instantánea en **Blob privado**. Conectar el almacén al proyecto para obtener `BLOB_READ_WRITE_TOKEN`, o usar `BLOB_STORE_ID` con la identidad OIDC del runtime. En Vercel nunca se usa disco efímero como persistencia. Desarrollo, revisión y producción tienen rutas de catálogo separadas; solo `VERCEL_ENV=production` selecciona producción y solo `VERCEL_ENV=preview` selecciona revisión. Un entorno local, ausente o distinto usa desarrollo. Las credenciales quedan solo en el servidor y los costos USD nunca salen por la API pública.
 
-`npm start` escucha en `127.0.0.1`; un despliegue propio necesita un proxy inverso o ajustar la escucha a la configuración del alojamiento. El programador y la publicación no quedan activados por descargar este repositorio.
+`vercel.json` declara `GET /api/cron/sync-catalog` diariamente a las 07:15 UTC (02:15 en Colombia). Configurar un `CRON_SECRET` aleatorio; la ruta exige `Authorization: Bearer …`. El horario debe ajustarse al momento real de actualización del feed y de la tasa para mantener su vigencia de 26 horas. Vercel ejecuta cron únicamente en despliegues **de producción**; una revisión preview no activa tareas periódicas. Una llamada autorizada responde `503 not_configured` si falta fuente o almacenamiento, `502 failed` si falla la importación y `200 updated` solo después de guardar una instantánea válida.
+
+Sin feed o margen, el despliegue puede revisarse con las referencias archivadas y consultar la selección por WhatsApp; no habilita cobros ni presenta esos datos como inventario vigente. Promover a producción no resuelve automáticamente la autorización del catálogo ni el margen pendiente.
+
+En desarrollo sin Blob o en un servidor propio, la aplicación mantiene la escritura atómica en `GLAMOUR_DATA_DIR` (por defecto `./data`); se requiere un volumen persistente y una sola instancia escritora. `npm start` escucha en `127.0.0.1`, por lo que un alojamiento propio necesita proxy inverso o ajustar la escucha.
 
 Para contribuir, usar una rama `codex/`, mantener los secretos fuera de Git y ejecutar las comprobaciones anteriores. Las reglas comerciales se prueban en servidor; los cambios de catálogo, selección, carrito o pago también deben revisarse en móvil y escritorio.
 

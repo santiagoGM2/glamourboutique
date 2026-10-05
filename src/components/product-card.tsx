@@ -20,9 +20,31 @@ export default function ProductCard({
 }) {
   const colors = [...new Map(product.variants.map((v) => [v.color, v])).values()];
   const [color, setColor] = useState(colors[0]?.color);
-  const [failed, setFailed] = useState(false);
+  const [failedImages, setFailedImages] = useState<string[]>([]);
   const colorImage = colors.find((v) => v.color === color)?.image;
-  const mainImage = colorImage || product.images[0];
+  const mainImage = colorImage
+    ? failedImages.includes(colorImage)
+      ? undefined
+      : colorImage
+    : product.images.find((src) => !failedImages.includes(src));
+  // A variant photo does not imply that the rest of the gallery shows that color.
+  const alternateImage =
+    !colorImage || colors.length === 1
+      ? product.images.find((src) => src !== mainImage && !failedImages.includes(src))
+      : undefined;
+  const selectedPrices = product.variants
+    .filter((v) => v.color === color && v.priceCop !== null)
+    .map((v) => v.priceCop as number);
+  const selectedPrice = selectedPrices.length
+    ? Math.min(...selectedPrices)
+    : colors.length
+      ? null
+      : product.priceCop;
+  const referenceColor =
+    product.preview && colors.length === 1 && colors[0].color === 'Según fotografía';
+  const markImageFailed = (src: string) => {
+    setFailedImages((previous) => (previous.includes(src) ? previous : [...previous, src]));
+  };
   return (
     <article
       className="product-card"
@@ -30,24 +52,27 @@ export default function ProductCard({
     >
       <div className="product-visual">
         <button className="product-open" onClick={onOpen} aria-label={`Ver ${product.name}`}>
-          {mainImage && !failed ? (
+          {mainImage ? (
             <>
               <Image
+                key={mainImage}
                 src={mainImage}
                 alt={product.name}
                 fill
                 sizes="(max-width: 680px) 50vw, (max-width: 1000px) 33vw, 25vw"
                 className="product-photo primary-photo"
-                priority={index < 4}
-                onError={() => setFailed(true)}
+                loading={index < 4 ? 'eager' : 'lazy'}
+                onError={() => markImageFailed(mainImage)}
               />
-              {product.images[1] && (
+              {alternateImage && (
                 <Image
-                  src={product.images[1]}
+                  key={alternateImage}
+                  src={alternateImage}
                   alt={`${product.name}, otra vista`}
                   fill
                   sizes="(max-width: 680px) 50vw, 25vw"
                   className="product-photo secondary-photo"
+                  onError={() => markImageFailed(alternateImage)}
                 />
               )}
             </>
@@ -77,26 +102,30 @@ export default function ProductCard({
           {product.name}
         </button>
         <div className="price-row">
-          <span className={product.priceCop === null ? 'price pending-price' : 'price'}>
-            {product.priceCop === null ? 'Precio por confirmar' : money(product.priceCop)}
-            {product.priceCop !== null && <small> COP</small>}
+          <span className={selectedPrice === null ? 'price pending-price' : 'price'}>
+            {selectedPrice === null ? 'Precio por confirmar' : money(selectedPrice)}
+            {selectedPrice !== null && <small> COP</small>}
           </span>
         </div>
-        {colors.length > 0 && (
-          <div className="swatches">
-            {colors.map((v) => (
-              <button
-                key={v.color}
-                className={`swatch ${v.color === color ? 'selected' : ''}`}
-                style={{ '--swatch': v.colorHex } as React.CSSProperties}
-                aria-label={`${product.name}: ${v.color}`}
-                aria-pressed={v.color === color}
-                title={v.color}
-                onClick={() => setColor(v.color)}
-              />
-            ))}
-            <span className="swatch-label">{color}</span>
-          </div>
+        {referenceColor ? (
+          <p className="reference-options">Tallas y colores por confirmar</p>
+        ) : (
+          colors.length > 0 && (
+            <div className="swatches">
+              {colors.map((v) => (
+                <button
+                  key={v.color}
+                  className={`swatch ${v.color === color ? 'selected' : ''}`}
+                  style={{ '--swatch': v.colorHex } as React.CSSProperties}
+                  aria-label={`${product.name}: ${v.color}`}
+                  aria-pressed={v.color === color}
+                  title={v.color}
+                  onClick={() => setColor(v.color)}
+                />
+              ))}
+              <span className="swatch-label">{color}</span>
+            </div>
+          )
         )}
       </div>
     </article>

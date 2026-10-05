@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Check,
   Heart,
+  ImageSquare,
   ShoppingBagOpen,
   WhatsappLogo,
 } from '@phosphor-icons/react';
@@ -32,12 +33,20 @@ export default function ProductDetail({
   const [size, setSize] = useState('');
   const [error, setError] = useState('');
   const [video, setVideo] = useState<number | null>(null);
+  const [failedImages, setFailedImages] = useState<string[]>([]);
   const gallery = [
     ...new Set([...product.images, ...product.variants.flatMap((v) => (v.image ? [v.image] : []))]),
   ];
   const variants = product.variants.filter((v) => v.color === color);
-  const variant = variants.find((v) => v.size === size);
+  const unconfirmedSize =
+    product.preview && variants.length === 1 && variants[0].size === 'Por confirmar';
+  const referenceColor =
+    product.preview && colors.length === 1 && colors[0].color === 'Según fotografía';
+  const variant = unconfirmedSize ? variants[0] : variants.find((v) => v.size === size);
   const selectedPrice = variant ? variant.priceCop : product.priceCop;
+  const markImageFailed = (src: string) => {
+    setFailedImages((previous) => (previous.includes(src) ? previous : [...previous, src]));
+  };
   const selectColor = (next: string) => {
     setColor(next);
     setSize('');
@@ -60,16 +69,22 @@ export default function ProductDetail({
                 playsInline
                 preload="metadata"
               />
-            ) : gallery[image] ? (
+            ) : gallery[image] && !failedImages.includes(gallery[image]) ? (
               <Image
+                key={gallery[image]}
                 src={gallery[image]}
                 alt={`${product.name}, vista ${image + 1}`}
                 fill
                 sizes="(max-width: 680px) 90vw, 45vw"
-                priority
+                loading="eager"
+                onError={() => markImageFailed(gallery[image])}
               />
             ) : (
-              <span>Imagen no disponible</span>
+              <span className="photo-unavailable">
+                <ImageSquare size={36} weight="thin" />
+                <span>Esta foto no está disponible</span>
+                {gallery.length > 1 && <span>Prueba con otra vista de la prenda.</span>}
+              </span>
             )}
             {video === null && gallery.length > 1 && (
               <div className="gallery-navigation">
@@ -97,18 +112,24 @@ export default function ProductDetail({
                 key={src}
                 className={i === image && video === null ? 'selected' : ''}
                 aria-label={`Ver foto ${i + 1}`}
+                aria-pressed={i === image && video === null}
                 onClick={() => {
                   setImage(i);
                   setVideo(null);
                 }}
               >
-                <Image src={src} alt="" fill sizes="64px" />
+                {failedImages.includes(src) ? (
+                  <ImageSquare size={22} weight="thin" />
+                ) : (
+                  <Image src={src} alt="" fill sizes="64px" onError={() => markImageFailed(src)} />
+                )}
               </button>
             ))}
             {product.videos.map((src, i) => (
               <button
                 key={src}
                 className={`video-thumbnail ${video === i ? 'selected' : ''}`}
+                aria-pressed={video === i}
                 onClick={() => setVideo(i)}
               >
                 Video {i + 1}
@@ -129,7 +150,7 @@ export default function ProductDetail({
             </p>
           )}
           <p className="description">{product.description}</p>
-          {colors.length > 0 && (
+          {!referenceColor && colors.length > 0 && (
             <fieldset>
               <legend>
                 Color <span>— {color}</span>
@@ -148,30 +169,37 @@ export default function ProductDetail({
               </div>
             </fieldset>
           )}
-          <fieldset>
-            <legend>
-              Talla <span>— {size || 'Selecciona tu talla'}</span>
-            </legend>
-            <div className="size-buttons">
-              {variants.map((v) => (
-                <button
-                  key={v.id}
-                  className={size === v.size ? 'selected' : ''}
-                  disabled={!product.preview && v.stock < 1}
-                  onClick={() => {
-                    setSize(v.size);
-                    setError('');
-                  }}
-                  aria-pressed={size === v.size}
-                >
-                  {v.size}
-                </button>
-              ))}
-            </div>
-            {variants.length === 0 && (
-              <p className="muted">Consulta las opciones disponibles con una asesora.</p>
-            )}
-          </fieldset>
+          {unconfirmedSize ? (
+            <p className="variant-note">
+              <span>Tallas{referenceColor ? ' y colores' : ''}</span>
+              Confirmamos las opciones disponibles por WhatsApp.
+            </p>
+          ) : (
+            <fieldset>
+              <legend>
+                Talla <span>— {size || 'Selecciona tu talla'}</span>
+              </legend>
+              <div className="size-buttons">
+                {variants.map((v) => (
+                  <button
+                    key={v.id}
+                    className={size === v.size ? 'selected' : ''}
+                    disabled={!product.preview && v.stock < 1}
+                    onClick={() => {
+                      setSize(v.size);
+                      setError('');
+                    }}
+                    aria-pressed={size === v.size}
+                  >
+                    {v.size}
+                  </button>
+                ))}
+              </div>
+              {variants.length === 0 && (
+                <p className="muted">Consulta las opciones disponibles con una asesora.</p>
+              )}
+            </fieldset>
+          )}
           <a
             className="size-help"
             href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hola, necesito ayuda con la talla de ${product.name}. ${product.sourceUrl}`)}`}
@@ -189,7 +217,9 @@ export default function ProductDetail({
             <button
               className="button dark"
               disabled={
-                variants.length === 0 || (!product.preview && !!variant && variant.stock < 1)
+                variants.length === 0 ||
+                (!product.preview &&
+                  (variants.every((v) => v.stock < 1) || (!!variant && variant.stock < 1)))
               }
               onClick={() => {
                 if (!variant) {

@@ -1,10 +1,13 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { hasIntegrationConfig, isFresh, readConfig, type ServerConfig } from './config';
-import { cacheSchema, feedSchema, type CatalogCache, type ExchangeRate } from './feed';
-import { MAX_CACHE_BYTES } from './catalog';
+import {
+  hasIntegrationConfig,
+  hasStorageConfig,
+  isFresh,
+  readConfig,
+  type ServerConfig,
+} from './config';
+import { cacheSchema, feedSchema, type ExchangeRate } from './feed';
+import { MAX_CACHE_BYTES, writeStoredCatalog } from './storage';
 
 export const FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -92,23 +95,6 @@ const fxResponseSchema = z.object({
   rates: z.object({ COP: z.number().min(100).max(100_000) }),
 });
 
-async function writeAtomicCache(cache: CatalogCache, config: ServerConfig): Promise<void> {
-  await mkdir(config.dataDir, { recursive: true });
-  const location = path.join(config.dataDir, 'catalog.json');
-  const temporary = path.join(config.dataDir, `catalog-${randomUUID()}.tmp`);
-  const serialized = JSON.stringify(cache);
-  if (Buffer.byteLength(serialized, 'utf8') > MAX_CACHE_BYTES)
-    throw new SyncError('El catálogo supera el límite de tamaño.');
-  try {
-    await writeFile(temporary, serialized, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-    // Validate what is on disk before replacing the last good version.
-    cacheSchema.parse(JSON.parse(await readFile(temporary, 'utf8')));
-    await rename(temporary, location);
-  } finally {
-    await unlink(temporary).catch(() => undefined);
-  }
-}
-
 export interface SyncOptions {
   config?: ServerConfig;
   now?: number;
@@ -127,6 +113,8 @@ export async function syncCatalog(
       'Configura el feed autorizado, su token y GLAMOUR_FX_PROVIDER antes de sincronizar.',
     );
   }
+  if (!hasStorageConfig(config))
+    throw new SyncError('Conecta un almacén privado Vercel Blob antes de sincronizar.');
   const feedUrl = validatedFeedUrl(config.feedUrl);
   try {
     const feed = feedSchema.parse(await fetchJson(feedUrl, fetcher, config.feedToken));
@@ -153,7 +141,7 @@ export async function syncCatalog(
       feed,
       exchangeRate,
     });
-    await writeAtomicCache(cache, config);
+    await writeStoredCatalog(cache, config);
     return { productCount: feed.products.length, syncedAt: cache.syncedAt };
   } catch (error) {
     if (error instanceof SyncError) throw error;

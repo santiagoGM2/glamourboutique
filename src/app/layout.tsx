@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   description:
     'Descubre la colección de Glamour Boutique Cali. Vestidos bandage, faldas, conjuntos y calzado. Arma tu selección y recibe atención por WhatsApp.',
   robots: { index: false, follow: false },
+  applicationName: 'Glamour Boutique Cali',
+  icons: {
+    icon: { url: '/brand/logo-glamour.png', type: 'image/png' },
+    apple: { url: '/brand/logo-glamour.png', type: 'image/png' },
+  },
 };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

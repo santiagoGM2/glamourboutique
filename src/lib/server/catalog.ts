@@ -1,22 +1,13 @@
-import { readFile, stat } from 'node:fs/promises';
-import path from 'node:path';
 import type { Catalog, Product } from '../types';
 import { hasIntegrationConfig, isFresh, readConfig, type ServerConfig } from './config';
-import { cacheSchema, productKey, type CatalogCache } from './feed';
+import { productKey, type CatalogCache } from './feed';
 import { priceInCop } from './pricing';
+import { readStoredCatalog } from './storage';
 
-export const MAX_CACHE_BYTES = 16 * 1_024 * 1_024;
+export { MAX_CACHE_BYTES } from './storage';
 
 export async function readCatalogCache(config: ServerConfig): Promise<CatalogCache | null> {
-  try {
-    const location = path.join(config.dataDir, 'catalog.json');
-    const metadata = await stat(location);
-    if (metadata.size > MAX_CACHE_BYTES || !metadata.isFile()) return null;
-    return cacheSchema.parse(JSON.parse(await readFile(location, 'utf8')));
-  } catch {
-    // Missing, invalid or unreadable cache must never create a purchasable catalog.
-    return null;
-  }
+  return readStoredCatalog(config);
 }
 
 export function isCacheFresh(cache: CatalogCache, now: number): boolean {

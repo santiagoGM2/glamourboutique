@@ -18,6 +18,12 @@ export interface ServerConfig {
   fxProvider: string;
   dataDir: string;
   pricing: PricingConfig | null;
+  storage?: {
+    driver: 'file' | 'blob';
+    pathname: string;
+    token?: string;
+    storeId?: string;
+  };
 }
 
 function decimalSetting(value: string | undefined, maximum: number): number | null {
@@ -52,7 +58,29 @@ export function readConfig(env: Record<string, string | undefined> = process.env
       /* turbopackIgnore: true */ env.GLAMOUR_DATA_DIR?.trim() || path.join(process.cwd(), 'data'),
     ),
     pricing,
+    storage: {
+      // A serverless deployment must never silently persist to its temporary disk.
+      driver:
+        env.VERCEL === '1' || env.BLOB_READ_WRITE_TOKEN?.trim() || env.BLOB_STORE_ID?.trim()
+          ? 'blob'
+          : 'file',
+      pathname: `glamour/catalog/${
+        env.VERCEL_ENV === 'production'
+          ? 'production'
+          : env.VERCEL_ENV === 'preview'
+            ? 'preview'
+            : 'development'
+      }.json`,
+      token: env.BLOB_READ_WRITE_TOKEN?.trim() || undefined,
+      storeId: env.BLOB_STORE_ID?.trim() || undefined,
+    },
   };
+}
+
+export function hasStorageConfig(config: ServerConfig): boolean {
+  return (
+    config.storage?.driver !== 'blob' || Boolean(config.storage.token || config.storage.storeId)
+  );
 }
 
 export function hasIntegrationConfig(config: ServerConfig): boolean {

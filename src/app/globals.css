@@ -650,6 +650,7 @@ input[type='radio'] {
 }
 .price {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .price small {
   font-size: 10px;
@@ -663,6 +664,7 @@ input[type='radio'] {
 }
 .swatches {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-top: 11px;
@@ -687,6 +689,12 @@ input[type='radio'] {
   font-size: 9px;
   color: #939087;
   margin-left: 4px;
+}
+.reference-options {
+  margin-top: 9px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
 }
 .catalog-end {
   text-align: center;
@@ -1092,8 +1100,8 @@ footer {
   overflow: hidden;
 }
 .detail-photo > img {
-  object-fit: cover;
-  object-position: top center;
+  object-fit: contain;
+  object-position: center;
 }
 .detail-photo video {
   width: 100%;
@@ -1135,6 +1143,8 @@ footer {
   flex: none;
   border: 1px solid transparent;
   overflow: hidden;
+  display: grid;
+  place-items: center;
 }
 .thumbnails button.selected {
   outline: 1px solid var(--gold);
@@ -1160,6 +1170,7 @@ footer {
   font-weight: 500;
   line-height: 1.1;
   margin: 12px 0 16px;
+  text-wrap: balance;
 }
 .detail-price {
   font-size: 17px;
@@ -1192,6 +1203,18 @@ footer {
 .detail-colors .swatch {
   width: 23px;
   height: 23px;
+}
+.variant-note {
+  margin-top: 22px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.variant-note > span {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+  margin-bottom: 4px;
 }
 .size-help {
   font-size: 11px;
@@ -1585,6 +1608,48 @@ footer {
   margin-bottom: 25px;
   color: var(--muted);
 }
+.not-found-page {
+  min-height: 100dvh;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+}
+.not-found-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 104px;
+  background: #080808;
+}
+.not-found-brand img {
+  width: 168px;
+  height: auto;
+}
+.not-found-content {
+  width: min(100%, 640px);
+  margin: auto;
+  padding: 70px 24px 100px;
+}
+.not-found-content h1 {
+  font-family: var(--font-display);
+  font-size: clamp(42px, 6vw, 64px);
+  font-weight: 400;
+  line-height: 1.1;
+  margin: 20px 0;
+  text-wrap: balance;
+}
+.not-found-content p {
+  max-width: 390px;
+  margin: 0 auto 30px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.85;
+}
+.not-found-content .text-button {
+  display: block;
+  width: fit-content;
+  margin: 17px auto 0;
+}
 @media (min-width: 1600px) {
   .product-grid,
   .catalog-toolbar,
@@ -1678,12 +1743,12 @@ footer {
     letter-spacing: 1px;
   }
   .masthead {
-    height: 83px;
+    height: 76px;
     padding: 0 15px;
   }
   .brand img {
     width: 132px;
-    height: 83px;
+    height: 76px;
   }
   .location-label {
     display: none;
@@ -1713,28 +1778,29 @@ footer {
     display: none;
   }
   .collection-intro {
-    padding: 19px 18px 0;
+    padding: 14px 18px 0;
   }
   .breadcrumb {
     font-size: 9px;
-    margin-bottom: 25px;
+    margin-bottom: 12px;
   }
   .eyebrow {
     font-size: 9px;
     letter-spacing: 2px;
   }
   .collection-intro h1 {
-    font-size: 37px;
+    font-size: 35px;
     letter-spacing: -0.7px;
-    margin: 9px 0;
+    margin: 7px 0;
+    text-wrap: balance;
   }
   .collection-intro > p {
     font-size: 11px;
   }
   .collection-tabs {
     gap: 20px;
-    margin-top: 19px;
-    height: 43px;
+    margin-top: 12px;
+    height: 40px;
     overflow: auto;
     justify-content: flex-start;
     white-space: nowrap;
@@ -1743,8 +1809,8 @@ footer {
     font-size: 11px;
   }
   .catalog-notice {
-    margin: 15px 16px 0;
-    padding: 10px 12px;
+    margin: 12px 16px 0;
+    padding: 9px 12px;
     gap: 9px;
     align-items: flex-start;
     font-size: 10px;
@@ -1757,11 +1823,11 @@ footer {
     display: none;
   }
   .catalog-notice strong {
-    display: block;
+    display: inline;
     font-size: 10px;
   }
   .catalog-toolbar {
-    height: 68px;
+    height: 56px;
     margin: 0 16px;
     gap: 14px;
   }
@@ -1794,7 +1860,7 @@ footer {
   .product-grid.columns-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 26px 12px;
-    margin: 17px 16px 0;
+    margin: 12px 16px 0;
     padding: 0;
   }
   .product-visual {
@@ -1948,8 +2014,8 @@ footer {
     padding: 18px 20px 0;
   }
   .detail-photo {
-    aspect-ratio: 4/4.6;
-    max-height: 65dvh;
+    aspect-ratio: 3/4;
+    max-height: 68dvh;
   }
   .thumbnails {
     margin-top: 10px;

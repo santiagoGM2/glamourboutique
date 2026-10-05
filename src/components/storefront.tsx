@@ -505,8 +505,8 @@ export default function Storefront({ initialCatalog }: { initialCatalog: Catalog
           <div className="catalog-notice">
             <span className="notice-mark">i</span>
             <p>
-              <strong>Un vistazo a nuestra colección.</strong> Estas prendas son de muestra;
-              consulta su precio y disponibilidad antes de comprar.
+              <strong>Colección de referencia.</strong> Confirma precio y disponibilidad por
+              WhatsApp.
             </p>
             <a href={contactUrl} target="_blank" rel="noopener noreferrer">
               Consultar <ArrowUpRight size={14} />

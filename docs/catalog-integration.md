@@ -13,7 +13,7 @@ La [documentación oficial de AliExpress para la consulta de productos](https://
 1. Obtener autorización de las tiendas o un integrador con acceso autorizado a sus catálogos, imágenes, vídeos, SKU, precios y existencias. El integrador debe enumerar ambas tiendas completamente, resolver la paginación y entregar los nombres/descripciones en español y disponibilidad para Colombia.
 2. Implementar o contratar un endpoint HTTPS que cumpla el contrato de abajo. Guardar su URL y token únicamente en las variables del servidor.
 3. Definir margen, gastos incluidos en el precio, política de envío y redondeo con Glamour. No se asigna un margen comercial por suposición.
-4. Elegir un servidor con almacenamiento persistente, ejecutar una sincronización real, contrastar referencias y precios con ambas tiendas y programar el trabajo diario en ese servidor.
+4. Conectar un almacén **Blob privado** al proyecto Vercel (o un volumen persistente en alojamiento propio), ejecutar una sincronización real, contrastar referencias y precios con ambas tiendas y comprobar el trabajo diario.
 
 El adaptador no ordena compras en AliExpress ni recibe/valida transferencias. El pago se verifica por el negocio en WhatsApp.
 
@@ -30,6 +30,9 @@ Copiar `.env.example` a `.env.local` y completar únicamente lo que ya esté aco
 | `GLAMOUR_FIXED_COST_COP_PER_ITEM` | Costo fijo entero en COP por unidad añadido después del incremento. Predeterminado: `0`. No representa un cálculo automático de envío o impuestos.                                          |
 | `GLAMOUR_PRICE_ROUNDING_COP`      | Redondeo hacia arriba a múltiplos de esta cantidad entera. Predeterminado: `100`.                                                                                                           |
 | `GLAMOUR_DATA_DIR`                | Directorio persistente compartido por el servidor y el proceso de sincronización. Vacío usa `./data`.                                                                                       |
+| `BLOB_READ_WRITE_TOKEN`           | Token del almacén **privado** conectado en Vercel. Se utiliza solo en servidor; activa Blob también al ejecutar la sincronización local.                                                    |
+| `BLOB_STORE_ID`                   | Alternativa de identidad: ID del almacén conectado, usado con `VERCEL_OIDC_TOKEN` administrado automáticamente por Vercel. El SDK acepta `store_<id>` o `<id>`.                             |
+| `CRON_SECRET`                     | Secreto aleatorio para autenticar `GET /api/cron/sync-catalog`. Nunca incluirlo en URLs ni en el navegador.                                                                                 |
 
 Fórmula por SKU y unidad:
 
@@ -81,7 +84,7 @@ Con `GLAMOUR_FX_PROVIDER=exchange-rate-api` el trabajo consulta `https://open.er
 
 La [documentación de ExchangeRate-API](https://www.exchangerate-api.com/docs/free) permite uso comercial y caché de conversión, indica actualización diaria y exige un enlace de atribución en las páginas que utilizan la tasa. La interfaz debe conservar el enlace a [ExchangeRate-API](https://www.exchangerate-api.com). No se expone ni redistribuye su matriz de tasas.
 
-Cada petición remota tiene un límite de 20 segundos; el JSON/caché se limita a 16 MiB. Una sincronización solo reemplaza `catalog.json` cuando el feed completo y la tasa pasan la validación. Se escribe un archivo temporal en el mismo directorio, se valida y se renombra; cualquier error conserva la última versión válida. Los errores no imprimen tokens, URLs con datos sensibles ni respuestas remotas.
+Cada petición remota tiene un límite de 20 segundos; el JSON/caché se limita a 16 MiB. Una sincronización solo reemplaza la instantánea cuando el feed completo y la tasa pasan la validación. En Blob se usa acceso privado, lectura consistente (`useCache: false`), escritura condicional por ETag y rechazo de una actualización anterior a la guardada. Un trabajo concurrente no puede sobrescribir una versión que cambió después de su lectura. La creación inicial prohíbe sobrescribir. En disco local se escribe un archivo temporal en el mismo directorio, se valida y se renombra. Los errores conservan la última versión válida y no imprimen credenciales ni respuestas remotas.
 
 La vigencia máxima es de **26 horas**, comprobada en el momento de consultar o cotizar. Afecta a la hora de sincronización, al feed, a cada producto y a la tasa. Fechas con más de cinco minutos hacia el futuro también son inválidas. Una colección vencida puede seguir visible como consulta, pero no permite cotizar ni proceder al pago. La sincronización no rejuvenece los datos viejos porque conserva sus fechas de origen.
 
@@ -95,11 +98,13 @@ npm run sync:catalog
 
 La salida exitosa contiene únicamente cantidad de productos y fecha; los fallos terminan con código distinto de cero. Alertar al responsable de operación cuando falle. Programar un único proceso diario después de la actualización de la tasa y del catálogo del integrador; la ventana de dos horas entre 24 y 26 horas no reemplaza la monitorización. Un job ejecutado muchas horas después de la actualización diaria de la tasa puede dejar de cumplir la vigencia antes del siguiente ciclo: ajustar el horario o usar un ciclo de verificación más frecuente respetando las cuotas de ambos proveedores.
 
-En Linux se puede ejecutar mediante el programador del servidor; en Windows, con el Programador de tareas. El directorio de trabajo y `GLAMOUR_DATA_DIR` deben coincidir con los de la aplicación. Evitar trabajos simultáneos y mantener el reloj del servidor sincronizado.
+En Vercel, `src/lib/server/storage.ts` usa Blob privado automáticamente cuando `VERCEL=1`. También lo usa al configurar `BLOB_READ_WRITE_TOKEN` o `BLOB_STORE_ID` en desarrollo. Sin credenciales válidas no se recurre al disco temporal. Las instantáneas están aisladas en tres rutas: `glamour/catalog/production.json` únicamente con `VERCEL_ENV=production`, `glamour/catalog/preview.json` únicamente con `VERCEL_ENV=preview`, y `glamour/catalog/development.json` en cualquier otro caso, incluido desarrollo local o variable ausente. Descargar credenciales para desarrollo no selecciona el catálogo productivo. Al sincronizar desde una máquina local contra el almacén de revisión se debe definir `VERCEL_ENV=preview` explícitamente.
 
-**No hay una tarea remota ya programada ni un entorno productivo conectado en esta entrega.** Un job de GitHub Actions aislado no comparte disco con el sitio, por lo que no actualizaría este catálogo. No se guardan catálogos comerciales ni secretos mediante commits automáticos.
+`vercel.json` declara una ejecución diaria de `GET /api/cron/sync-catalog` a las **07:15 UTC (02:15 en Colombia)**. El endpoint requiere `Authorization: Bearer <CRON_SECRET>` y dispone de hasta 120 segundos. Falta de configuración devuelve HTTP `503` con `status: not_configured`; error de importación devuelve `502` con `status: failed`; únicamente una escritura verificada devuelve `200` con `status: updated`, cantidad de productos y fecha. El cron puede importar con el margen vacío, pero ese estado mantiene los precios y el pago deshabilitados.
 
-Este adaptador local está preparado para un único servidor Node con volumen durable. No funciona como persistencia de producción en archivos efímeros de Vercel, otras funciones serverless o réplicas con discos independientes. Antes de adoptar esos entornos, sustituir la capa de caché por una base de datos o almacenamiento de objetos compartido y conectar el job a la misma fuente; mantener la validación y las comprobaciones de vigencia.
+Los [cron de Vercel](https://vercel.com/docs/cron-jobs) solo se ejecutan en producción: **un despliegue preview no activa actualización periódica**. El archivo de configuración no constituye evidencia de conexión a AliExpress ni de una ejecución exitosa. Al activar el feed, ajustar el horario según su actualización real y la tasa de cambio; verificar en los logs la primera ejecución y comprobar que la API mantiene el catálogo vigente. El horario inicial es una configuración de despliegue, no una garantía sobre la hora de publicación de los proveedores.
+
+En Linux o Windows propios se puede ejecutar mediante su programador con el mismo directorio `GLAMOUR_DATA_DIR` que la aplicación; el modo archivo requiere un volumen persistente y una sola instancia escritora. Un job externo con Blob debe apuntar al mismo almacén y entorno, sin guardar catálogos comerciales ni secretos mediante commits automáticos.
 
 ## API pública y flujo de WhatsApp
 
@@ -123,6 +128,6 @@ El total calculado es el total de artículos con los costos por unidad configura
 
 ## Verificación automatizada
 
-`npm test` cubre configuración sin margen, fórmula COP, fechas antiguas/futuras, medios y proveedores inválidos, duplicados, manipulación de precios, falta de stock, vencimiento de cotización, autenticación del feed, reemplazo atómico, conservación de la última versión válida y límites HTTP. Las fixtures son sintéticas, viven solo en pruebas y no constituyen catálogo de venta.
+`npm test` cubre configuración sin margen, fórmula COP, fechas antiguas/futuras, medios y proveedores inválidos, duplicados, manipulación de precios, falta de stock, vencimiento de cotización, autenticación del feed, reemplazo atómico, conservación de la última versión válida y límites HTTP. Prueba además persistencia privada, aislamiento desarrollo/preview/producción, lecturas consistentes, escrituras concurrentes, límite de tamaño por metadatos y por stream, autenticación del cron y sus estados de configuración/error. Las fixtures son sintéticas, viven solo en pruebas y no constituyen catálogo de venta.
 
 Estas pruebas verifican el software y sus errores esperados. No prueban acceso real a las tiendas: esa verificación solo puede hacerse cuando existan credenciales y un catálogo autorizado.
