@@ -22,6 +22,10 @@ Glamour Boutique Cali vende vestidos, faldas, calzado y otras prendas, con espec
 
 ## Requisitos funcionales y aceptación
 
+**Ajuste de alcance del 5 de octubre de 2026:** el usuario permite iniciar con una selección de 200–500 productos por proveedor y exige buscar una conexión sin suscripción. La selección debe identificarse como tal y actualizar cada referencia incluida; no se afirmará que representa todo el inventario ni los más vendidos sin evidencia. Ver [propuesta de integración directa](plan-catalogo-sin-suscripcion.md). El acceso real sigue pendiente.
+
+**Última instrucción:** iniciar con 200 productos de cada proveedor. Se adopta provisionalmente $5.000 COP como límite de cambio menor, según los ejemplos del usuario. Las diferencias superiores se registran como significativas; todos los valores se actualizan si la fuente válida los cambia. Esta tolerancia no permite inventar el precio inicial ni la disponibilidad.
+
 ### RF-01. Identidad y diseño del catálogo
 
 Usar el logo de Glamour y una presentación de moda cuidada, inspirada en la composición, jerarquía, distribución y comportamiento de la referencia. No reutilizar imágenes, videos, productos ni textos de Mew Mews.

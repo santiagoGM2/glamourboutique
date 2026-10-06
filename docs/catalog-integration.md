@@ -106,6 +106,20 @@ Los [cron de Vercel](https://vercel.com/docs/cron-jobs) solo se ejecutan en prod
 
 En Linux o Windows propios se puede ejecutar mediante su programador con el mismo directorio `GLAMOUR_DATA_DIR` que la aplicación; el modo archivo requiere un volumen persistente y una sola instancia escritora. Un job externo con Blob debe apuntar al mismo almacén y entorno, sin guardar catálogos comerciales ni secretos mediante commits automáticos.
 
+## Selección de 200 referencias y cambios de precio
+
+Después de validar la respuesta completa de la fuente, el importador conserva hasta 200 referencias por tienda. Primero mantiene los IDs de la selección anterior que todavía existen en la nueva respuesta, tomando sus datos nuevos, y después llena vacantes en el orden de la fuente. La ausencia en una respuesta completa representa una baja; un error de descarga nunca equivale a una respuesta vacía. Una variante agotada conserva su stock cero y no se convierte en disponible por estar seleccionada.
+
+La instantánea privada añade `selection` con recuentos por tienda, objetivo 200 y `complete` verdadero solo si se alcanzan 200 de cada una. Esto acredita el tamaño de la selección, no la cobertura de todo AliExpress. Si se reciben menos artículos, se guarda el número real y se informa que no está completa.
+
+El campo privado `changes` compara las variantes coincidentes de la selección nueva y anterior, por tienda, producto y SKU. Guarda importe anterior/nuevo, diferencia y existencias. Cambios absolutos de 1 a 5.000 COP son `minor`; más de 5.000 COP son `significant`. No se descartan las actualizaciones pequeñas ni se bloquea automáticamente una grande. La primera importación informa altas, sin inventar precios anteriores; nuevos o eliminados SKU no tienen precio comparable. Se cuenta altas/bajas de producto por separado.
+
+Con margen configurado, ambas versiones se calculan con la fórmula comercial **actual** (`sale_price_cop`); el informe no reconstruye cambios históricos de margen. Sin margen compara costo USD por cambio de cada instantánea, redondeado hacia arriba a un peso (`supplier_cost_cop`). También detecta diferencias debidas al dólar. La comparación es contra la sincronización inmediatamente anterior, no un umbral acumulado de varias semanas.
+
+`sync:catalog` y la respuesta autenticada del cron incluyen cobertura y recuentos de cambios. El detalle y los costos permanecen en el caché privado; `/api/catalog` no los devuelve. El informe describe la última sincronización, no un historial permanente ni un aviso enviado por correo o WhatsApp. Mantener el tamaño total dentro del límite de 16 MiB; si el nuevo documento lo supera, se conserva la instantánea anterior.
+
+Esta lógica solo procesa un feed obtenido legítimamente. No entra a páginas de AliExpress, no crea credenciales, no supera los bloqueos de navegación y no significa que ya haya 400 productos disponibles.
+
 ## API pública y flujo de WhatsApp
 
 `GET /api/catalog` devuelve la interfaz `Catalog` de `src/lib/types.ts`. Las respuestas no se cachean en el navegador/CDN. Estados: `unconfigured`, `live` o `stale`; `preview` pertenece a la interfaz de demostración, no al importador. Sin configuración o caché válido devuelve cero productos y `checkoutEnabled: false`.

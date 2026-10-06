@@ -35,6 +35,10 @@ El contrato del feed y las variables completas están en [la guía de integraci�
 
 La importación conserva el último catálogo válido si falla la nueva descarga. Las cotizaciones revisan variantes, existencias, margen y antigüedad del catálogo y del cambio en el servidor. Los precios que envía el navegador no se usan para calcular el total.
 
+La colección selecciona como máximo **200 productos de cada proveedor**, mantiene sus referencias entre actualizaciones y completa vacantes desde la fuente verificada. Informa el recuento real de cada tienda: no fabrica artículos para alcanzar 400. El orden inicial es el de la fuente, no una clasificación garantizada de más vendidos.
+
+Cada sincronización compara los SKU con la versión anterior. Registra cambios de precio de hasta **$5.000 COP** como menores y superiores como significativos, tanto al subir como al bajar; todos los precios nuevos se actualizan. El informe detallado queda en el almacenamiento privado y el comando de sincronización devuelve solo recuentos. Sin margen compara costos del proveedor convertidos a COP; esos costos no se muestran a las clientas. No se envían notificaciones externas automáticamente.
+
 ## Pago y WhatsApp
 
 La llave es `3128851441`; WhatsApp abre `+57 3128851441` con el resumen de prendas, variantes y cantidades. Con datos reales válidos, el servidor genera una cotización de duración limitada y su total en COP. En vista previa se solicita una cotización a Glamour.

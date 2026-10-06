@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { SUPPLIER_IDS } from './config';
+import { selectionSchema } from './selection';
+import { changesReportSchema } from './changes';
 
 const text = (max: number) =>
   z
@@ -150,8 +152,24 @@ export const cacheSchema = z
     syncedAt: timestamp,
     feed: feedSchema,
     exchangeRate: exchangeRateSchema,
+    selection: selectionSchema.optional(),
+    changes: changesReportSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((cache, context) => {
+    if (!cache.selection) return;
+    for (const supplierId of SUPPLIER_IDS) {
+      const count = cache.feed.products.filter(
+        (product) => product.supplierId === supplierId,
+      ).length;
+      if (cache.selection.counts[supplierId] !== count)
+        context.addIssue({
+          code: 'custom',
+          message: 'Selection count does not match catalog',
+          path: ['selection', 'counts', supplierId],
+        });
+    }
+  });
 
 export type SupplierFeed = z.infer<typeof feedSchema>;
 export type SupplierProduct = SupplierFeed['products'][number];

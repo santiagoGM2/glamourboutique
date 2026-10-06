@@ -7,7 +7,9 @@ import {
   type ServerConfig,
 } from './config';
 import { cacheSchema, feedSchema, type ExchangeRate } from './feed';
-import { MAX_CACHE_BYTES, writeStoredCatalog } from './storage';
+import { MAX_CACHE_BYTES, readStoredCatalog, writeStoredCatalog } from './storage';
+import { selectCollection } from './selection';
+import { compareCatalogs, type ChangesReport } from './changes';
 
 export const FX_URL = 'https://open.er-api.com/v6/latest/USD';
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -102,9 +104,12 @@ export interface SyncOptions {
 }
 
 /** All network/validation work completes before the single atomic cache replacement. */
-export async function syncCatalog(
-  options: SyncOptions = {},
-): Promise<{ productCount: number; syncedAt: string }> {
+export async function syncCatalog(options: SyncOptions = {}): Promise<{
+  productCount: number;
+  syncedAt: string;
+  selection?: ReturnType<typeof selectCollection>['selection'];
+  changeSummary?: ChangesReport['counts'];
+}> {
   const config = options.config ?? readConfig();
   const now = options.now ?? Date.now();
   const fetcher = options.fetcher ?? fetch;
@@ -135,14 +140,26 @@ export async function syncCatalog(
     };
     if (!isFresh(exchangeRate.asOf, now))
       throw new SyncError('La tasa de cambio no está vigente. Se conserva el catálogo anterior.');
-    const cache = cacheSchema.parse({
+    const previous = await readStoredCatalog(config);
+    const selected = selectCollection(feed, previous?.feed);
+    const candidate = cacheSchema.parse({
       schemaVersion: 1,
       syncedAt: new Date(now).toISOString(),
-      feed,
+      feed: selected.feed,
       exchangeRate,
+      selection: selected.selection,
+    });
+    const cache = cacheSchema.parse({
+      ...candidate,
+      changes: compareCatalogs(previous, candidate, config.pricing),
     });
     await writeStoredCatalog(cache, config);
-    return { productCount: feed.products.length, syncedAt: cache.syncedAt };
+    return {
+      productCount: cache.feed.products.length,
+      syncedAt: cache.syncedAt,
+      selection: selected.selection,
+      changeSummary: cache.changes?.counts,
+    };
   } catch (error) {
     if (error instanceof SyncError) throw error;
     if (error instanceof z.ZodError) {

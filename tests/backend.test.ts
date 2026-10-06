@@ -296,7 +296,33 @@ test('synchronization authenticates only the feed, validates FX and atomically r
   ]);
   const saved = await readCatalogCache(localConfig);
   assert.equal(saved?.feed.products[0].id, '1005000000001');
+  assert.deepEqual(result.selection?.counts, { '821117': 1, '1101290000': 0 });
+  assert.equal(result.selection?.complete, false);
+  assert.equal(saved?.changes?.counts.priceChanges, 0);
   assert.deepEqual(await readdir(directory), ['catalog.json']);
+});
+
+test('sync stores price-change details privately and returns counts without supplier costs', async (t) => {
+  const directory = await temporaryDirectory(t);
+  const localConfig = { ...config, dataDir: directory };
+  await writeFile(path.join(directory, 'catalog.json'), JSON.stringify(cache()), 'utf8');
+  const changed = feed();
+  changed.products[0].variants[0].priceUsd = 22;
+  changed.products[0].variants[0].stock = 2;
+  const result = await syncCatalog({
+    config: localConfig,
+    now,
+    fetcher: async (url) => jsonResponse(url.toString() === FX_URL ? fxResponse() : changed),
+  });
+  assert.equal(result.changeSummary?.significantPriceChanges, 1);
+  assert.equal(result.changeSummary?.stockChanges, 1);
+  const saved = await readCatalogCache(localConfig);
+  assert.equal(saved?.feed.products[0].variants[0].priceUsd, 22);
+  assert.equal(saved?.changes?.priceChanges[0].deltaCop, 10_000);
+  const publicCatalog = catalogFromCache(saved, localConfig, now);
+  assert.equal('changes' in publicCatalog, false);
+  assert.equal(JSON.stringify(publicCatalog).includes('priceUsd'), false);
+  assert.equal('priceChanges' in result, false);
 });
 
 test('failed or stale upstream sync preserves the last good cache byte-for-byte', async (t) => {
